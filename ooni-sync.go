@@ -39,25 +39,12 @@ var downloadURLChan chan string
 
 type progressCounter struct {
 	n, total uint
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
-func (progress *progressCounter) SetTotal(total uint) {
-	progress.mutex.Lock()
-	defer progress.mutex.Unlock()
-	progress.total = total
-}
-
-func (progress *progressCounter) Increment() (n, total uint) {
-	progress.mutex.Lock()
-	defer progress.mutex.Unlock()
-	progress.n += 1
-	return progress.n, progress.total
-}
-
-func formatProgress(n, total uint) string {
-	totalString := fmt.Sprintf("%d", total)
-	return fmt.Sprintf("%*d/%s", len(totalString), n, totalString)
+func (progress *progressCounter) format() string {
+	totalString := fmt.Sprintf("%d", progress.total)
+	return fmt.Sprintf("%*d/%s", len(totalString), progress.n, totalString)
 }
 
 var progress progressCounter
@@ -141,16 +128,36 @@ func maybeDownload(urlString string) (bool, error) {
 	return maybeDownloadToFile(urlString, filename)
 }
 
+func logOK(downloadURL string) {
+	progress.mutex.Lock()
+	progress.n += 1
+	fmt.Printf("%s ok: %s\n", progress.format(), downloadURL)
+	progress.mutex.Unlock()
+}
+
+func logExists(downloadURL string) {
+	progress.mutex.Lock()
+	progress.n += 1
+	fmt.Printf("%s exists: %s\n", progress.format(), downloadURL)
+	progress.mutex.Unlock()
+}
+
+func logError(downloadURL string, err error) {
+	progress.mutex.Lock()
+	progress.n += 1
+	fmt.Printf("%s error: %s: %s\n", progress.format(), downloadURL, err)
+	progress.mutex.Unlock()
+}
+
 func downloadFromChan(downloadURLChan <-chan string) {
 	for downloadURL := range downloadURLChan {
 		exists, err := maybeDownload(downloadURL)
-		n, total := progress.Increment()
 		if err != nil {
-			fmt.Printf("%s error: %s: %s\n", formatProgress(n, total), downloadURL, err)
+			logError(downloadURL, err)
 		} else if exists {
-			fmt.Printf("%s exists: %s\n", formatProgress(n, total), downloadURL)
+			logExists(downloadURL)
 		} else {
-			fmt.Printf("%s ok: %s\n", formatProgress(n, total), downloadURL)
+			logOK(downloadURL)
 		}
 	}
 }
@@ -217,7 +224,9 @@ func processIndex(query url.Values) error {
 			return fmt.Errorf("zero results")
 		}
 
-		progress.SetTotal(indexPage.Metadata.Count)
+		progress.mutex.Lock()
+		progress.total = indexPage.Metadata.Count
+		progress.mutex.Unlock()
 
 		offset += uint(len(indexPage.Results))
 
