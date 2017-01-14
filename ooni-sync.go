@@ -44,12 +44,19 @@ type ooniIndexPage struct {
 	Results  []ooniResult `json:"results"`
 }
 
-func downloadToWriter(urlString string, w io.Writer) error {
-	resp, err := http.Get(urlString)
+// Download the contents of a URL and copy them into w.
+func downloadToWriter(urlString string, w io.Writer) (err error) {
+	var resp *http.Response
+	resp, err = http.Get(urlString)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err2 := resp.Body.Close()
+		if err == nil {
+			err = err2
+		}
+	}()
 
 	_, err = io.Copy(w, resp.Body)
 	return err
