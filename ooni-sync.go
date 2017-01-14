@@ -11,8 +11,22 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 )
+
+func Usage() {
+	fmt.Fprintf(os.Stderr,
+`Usage: %s [OPTIONS] [KEY=VALUE]...
+
+Downloads selected OONI results.
+KEY and VALUE are query string parameters as described at
+https://measurements.ooni.torproject.org/api/. For example:
+%s test_name=tcp_connect probe_cc=US
+
+`, os.Args[0], os.Args[0])
+	flag.PrintDefaults()
+}
 
 // https://measurements.ooni.torproject.org/api/
 const ooniAPIURL = "https://measurements.ooni.torproject.org/api/v1/files"
@@ -228,14 +242,23 @@ func processIndex(query url.Values) error {
 	return nil
 }
 
+// Parse a sequence of "key=value" strings into a url.Values.
+func parseArgsToQuery(args []string) (url.Values, error) {
+	query := url.Values{}
+	for _, arg := range args {
+		parts := strings.SplitN(arg, "=", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return query, fmt.Errorf("malformed query parameter: %q", arg)
+		}
+		query.Add(parts[0], parts[1])
+	}
+	return query, nil
+}
+
 func main() {
+	flag.Usage = Usage
 	flag.StringVar(&outputDirectory, "directory", outputDirectory, "directory in which to save results")
 	flag.Parse()
-	if flag.NArg() > 0 {
-		// No arguments allowed.
-		flag.Usage()
-		os.Exit(1)
-	}
 
 	err := os.MkdirAll(outputDirectory, 0755)
 	if err != nil {
@@ -253,9 +276,12 @@ func main() {
 		}()
 	}
 
-	query := url.Values{}
-	query.Set("test_name", "tcp_connect")
-	err := processIndex(query)
+	query, err := parseArgsToQuery(flag.Args())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
+		os.Exit(1)
+	}
+	err = processIndex(query)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
