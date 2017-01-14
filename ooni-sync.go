@@ -19,6 +19,7 @@ import (
 const ooniAPIURL = "https://measurements.ooni.torproject.org/api/v1/files"
 const ooniAPILimit = 1000
 const outputDirectory = "results"
+const numDownloadThreads = 5
 
 var downloadURLChan chan string
 
@@ -207,7 +208,7 @@ func main() {
 
 	var wg sync.WaitGroup
 	downloadURLChan = make(chan string, ooniAPILimit)
-	for i := 0; i < 5; i++ {
+	for i := 0; i < numDownloadThreads; i++ {
 		wg.Add(1)
 		go func() {
 			downloadFromChan(downloadURLChan)
