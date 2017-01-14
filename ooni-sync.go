@@ -17,8 +17,9 @@ import (
 // https://measurements.ooni.torproject.org/api/
 const ooniAPIURL = "https://measurements.ooni.torproject.org/api/v1/files"
 const ooniAPILimit = 1000
-const outputDirectory = "results"
 const numDownloadThreads = 5
+
+var outputDirectory = "."
 
 var downloadURLChan chan string
 
@@ -228,10 +229,17 @@ func processIndex(query url.Values) error {
 }
 
 func main() {
+	flag.StringVar(&outputDirectory, "directory", outputDirectory, "directory in which to save results")
 	flag.Parse()
 	if flag.NArg() > 0 {
 		// No arguments allowed.
 		flag.Usage()
+		os.Exit(1)
+	}
+
+	err := os.MkdirAll(outputDirectory, 0755)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
 
