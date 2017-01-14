@@ -108,19 +108,16 @@ func downloadToFile(urlString, filename string) error {
 		return err
 	}
 
-	fmt.Printf("Downloading to %s: %s\n", tmpfile.Name(), urlString)
 	err = downloadToWriter(urlString, tmpfile)
 	err2 := tmpfile.Close()
 	if err == nil {
 		err = err2
 	}
 	if err != nil {
-		fmt.Printf("Deleting %s\n", tmpfile.Name())
 		os.Remove(tmpfile.Name())
 		return err
 	}
 
-	fmt.Printf("Renaming %s to %s\n", tmpfile.Name(), filename)
 	return os.Rename(tmpfile.Name(), filename)
 }
 
