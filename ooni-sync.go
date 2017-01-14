@@ -11,7 +11,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"sync"
 )
 
@@ -22,6 +21,31 @@ const outputDirectory = "results"
 const numDownloadThreads = 5
 
 var downloadURLChan chan string
+
+type progressCounter struct {
+	n, total uint
+	mutex sync.RWMutex
+}
+
+func (progress *progressCounter) SetTotal(total uint) {
+	progress.mutex.Lock()
+	defer progress.mutex.Unlock()
+	progress.total = total
+}
+
+func (progress *progressCounter) Increment() (n, total uint) {
+	progress.mutex.Lock()
+	defer progress.mutex.Unlock()
+	progress.n += 1
+	return progress.n, progress.total
+}
+
+func formatProgress(n, total uint) string {
+	totalString := fmt.Sprintf("%d", total)
+	return fmt.Sprintf("%*d/%s", len(totalString), n, totalString)
+}
+
+var progress progressCounter
 
 type ooniMetadata struct {
 	Count  uint `json:"count"`
@@ -85,21 +109,20 @@ func downloadToFile(urlString, filename string) error {
 	return os.Rename(tmpfile.Name(), filename)
 }
 
-func maybeDownloadToFile(urlString, filename string) error {
+func maybeDownloadToFile(urlString, filename string) (bool, error) {
 	_, err := os.Stat(filename)
-	if !os.IsNotExist(err) {
-		fmt.Printf("Already exists: %s\n", filename)
-		return err
+	if err == nil {
+		return true, err
+	} else if !os.IsNotExist(err) {
+		return false, err
 	}
-	return downloadToFile(urlString, filename)
+	return false, downloadToFile(urlString, filename)
 }
 
-// Downloads the given URL if the corresponding local file does not already
-// exist.
-func maybeDownload(urlString string) error {
+func maybeDownload(urlString string) (bool, error) {
 	u, err := url.Parse(urlString)
 	if err != nil {
-		return err
+		return false, err
 	}
 	filename := path.Base(u.Path)
 	filename = filepath.Join(outputDirectory, filename)
@@ -108,9 +131,14 @@ func maybeDownload(urlString string) error {
 
 func downloadFromChan(downloadURLChan <-chan string) {
 	for downloadURL := range downloadURLChan {
-		err := maybeDownload(downloadURL)
+		exists, err := maybeDownload(downloadURL)
+		n, total := progress.Increment()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: %s: %s\n", downloadURL, err)
+			fmt.Printf("%s error: %s: %s\n", formatProgress(n, total), downloadURL, err)
+		} else if exists {
+			fmt.Printf("%s exists: %s\n", formatProgress(n, total), downloadURL)
+		} else {
+			fmt.Printf("%s ok: %s\n", formatProgress(n, total), downloadURL)
 		}
 	}
 }
@@ -128,8 +156,8 @@ func fetchIndexPage(baseQuery url.Values, limit, offset uint) (*ooniIndexPage, e
 	}
 	// Set query values "order", "limit", and "offset".
 	query.Set("order", "asc")
-	query.Set("limit", strconv.FormatUint(uint64(limit), 10))
-	query.Set("offset", strconv.FormatUint(uint64(offset), 10))
+	query.Set("limit", fmt.Sprintf("%d", limit))
+	query.Set("offset", fmt.Sprintf("%d", offset))
 	u.RawQuery = query.Encode()
 
 	fmt.Printf("Index: %s\n", u.String())
@@ -177,8 +205,9 @@ func processIndex(query url.Values) error {
 			return fmt.Errorf("zero results")
 		}
 
+		progress.SetTotal(indexPage.Metadata.Count)
+
 		offset += uint(len(indexPage.Results))
-		fmt.Printf("Processed %d/%d\n", offset, indexPage.Metadata.Count)
 
 		if offset > indexPage.Metadata.Count {
 			return fmt.Errorf("offset exceeds count: %d > %d", offset, indexPage.Metadata.Count)
