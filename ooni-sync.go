@@ -35,8 +35,6 @@ const numDownloadThreads = 5
 
 var outputDirectory = "."
 
-var downloadURLChan chan string
-
 type progressCounter struct {
 	n, total uint
 	mutex sync.Mutex
@@ -199,7 +197,7 @@ func fetchIndexPage(baseQuery url.Values, limit, offset uint) (*ooniIndexPage, e
 	return &indexPage, nil
 }
 
-func processIndex(query url.Values) error {
+func processIndex(query url.Values, downloadURLChan chan<- string) error {
 	var offset uint = 0
 	for {
 		indexPage, err := fetchIndexPage(query, ooniAPILimit, offset)
@@ -273,7 +271,7 @@ func main() {
 	}
 
 	var wg sync.WaitGroup
-	downloadURLChan = make(chan string, ooniAPILimit)
+	downloadURLChan := make(chan string, ooniAPILimit)
 	for i := 0; i < numDownloadThreads; i++ {
 		wg.Add(1)
 		go func() {
@@ -287,7 +285,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
-	err = processIndex(query)
+	err = processIndex(query, downloadURLChan)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
