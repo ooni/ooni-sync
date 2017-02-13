@@ -138,27 +138,6 @@ func maybeDownload(urlString string, tmpFilenameChan chan<- string) *result {
 	return r
 }
 
-func logOK(downloadURL string) {
-	progress.mutex.Lock()
-	progress.n += 1
-	fmt.Printf("%s ok: %s\n", progress.format(), downloadURL)
-	progress.mutex.Unlock()
-}
-
-func logExists(downloadURL string) {
-	progress.mutex.Lock()
-	progress.n += 1
-	fmt.Printf("%s exists: %s\n", progress.format(), downloadURL)
-	progress.mutex.Unlock()
-}
-
-func logError(downloadURL string, err error) {
-	progress.mutex.Lock()
-	progress.n += 1
-	fmt.Printf("%s error: %s: %s\n", progress.format(), downloadURL, err)
-	progress.mutex.Unlock()
-}
-
 func downloadFromChan(downloadURLChan <-chan string, resultChan chan<- *result, tmpFilenameChan chan<- string) {
 	for downloadURL := range downloadURLChan {
 		resultChan <- maybeDownload(downloadURL, tmpFilenameChan)
@@ -249,6 +228,27 @@ func processIndex(query url.Values, downloadURLChan chan<- string) error {
 	}
 
 	return nil
+}
+
+func logOK(downloadURL string) {
+	progress.mutex.Lock()
+	progress.n += 1
+	fmt.Printf("%s ok: %s\n", progress.format(), downloadURL)
+	progress.mutex.Unlock()
+}
+
+func logExists(downloadURL string) {
+	progress.mutex.Lock()
+	progress.n += 1
+	fmt.Printf("%s exists: %s\n", progress.format(), downloadURL)
+	progress.mutex.Unlock()
+}
+
+func logError(downloadURL string, err error) {
+	progress.mutex.Lock()
+	progress.n += 1
+	fmt.Printf("%s error: %s: %s\n", progress.format(), downloadURL, err)
+	progress.mutex.Unlock()
 }
 
 // Parse a sequence of "key=value" strings into a url.Values.
