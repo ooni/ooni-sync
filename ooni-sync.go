@@ -17,8 +17,7 @@ import (
 )
 
 func Usage() {
-	fmt.Fprintf(os.Stderr,
-`Usage: %s [OPTIONS] [KEY=VALUE]...
+	fmt.Fprintf(os.Stderr, `Usage: %s [OPTIONS] [KEY=VALUE]...
 
 Downloads selected OONI results.
 KEY and VALUE are query string parameters as described at
@@ -48,7 +47,7 @@ type result struct {
 
 type progressCounter struct {
 	n, total uint
-	mutex sync.Mutex
+	mutex    sync.Mutex
 }
 
 func (progress *progressCounter) format() string {
