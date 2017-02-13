@@ -43,7 +43,7 @@ func identityFilter(w io.WriteCloser) (io.WriteCloser, error) {
 }
 
 type xzFilter struct {
-	cmd *exec.Cmd
+	cmd   *exec.Cmd
 	stdin io.WriteCloser
 }
 
@@ -59,7 +59,7 @@ func newXZFilter(w io.WriteCloser) (io.WriteCloser, error) {
 	}
 	err = xz.cmd.Start()
 	if err != nil {
-	     return nil, err
+		return nil, err
 	}
 	return xz, nil
 }
