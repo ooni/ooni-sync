@@ -277,17 +277,17 @@ func processIndex(query url.Values, downloadURLChan chan<- string) error {
 	return nil
 }
 
-func logOK(downloadURL string) {
+func logOK(localFilename string) {
 	progress.mutex.Lock()
 	progress.n += 1
-	fmt.Printf("%s ok: %s\n", progress.format(), downloadURL)
+	fmt.Printf("%s ok: %s\n", progress.format(), localFilename)
 	progress.mutex.Unlock()
 }
 
-func logExists(downloadURL string) {
+func logExists(localFilename string) {
 	progress.mutex.Lock()
 	progress.n += 1
-	fmt.Printf("%s exists: %s\n", progress.format(), downloadURL)
+	fmt.Printf("%s exists: %s\n", progress.format(), localFilename)
 	progress.mutex.Unlock()
 }
 
@@ -379,14 +379,14 @@ loop:
 			if r.Err != nil {
 				logError(r.URL, r.Err)
 			} else if r.Exists {
-				logExists(r.URL)
+				logExists(r.LocalFilename)
 			} else {
 				err := os.Rename(r.TmpFilename, r.LocalFilename)
 				if err != nil {
 					logError(r.URL, err)
 				} else {
 					delete(tmpFilenames, r.TmpFilename)
-					logOK(r.URL)
+					logOK(r.LocalFilename)
 				}
 			}
 		case <-sigChan:
