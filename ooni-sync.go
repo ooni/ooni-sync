@@ -367,6 +367,10 @@ func main() {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, os.Interrupt)
 
+	// Things we need to know for the final exit code.
+	var numErrors uint
+	var signalFlag bool
+
 loop:
 	for {
 		select {
@@ -378,18 +382,21 @@ loop:
 			}
 			if r.Err != nil {
 				logError(r.URL, r.Err)
+				numErrors += 1
 			} else if r.Exists {
 				logExists(r.LocalFilename)
 			} else {
 				err := os.Rename(r.TmpFilename, r.LocalFilename)
 				if err != nil {
 					logError(r.URL, err)
+					numErrors += 1
 				} else {
 					delete(tmpFilenames, r.TmpFilename)
 					logOK(r.LocalFilename)
 				}
 			}
 		case <-sigChan:
+			signalFlag = true
 			break loop
 		}
 	}
@@ -398,6 +405,14 @@ loop:
 		err := os.Remove(tmpFilename)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "cannot delete temporary: %s", err)
+			numErrors += 1
 		}
+	}
+
+	if numErrors > 0 {
+		fmt.Fprintf(os.Stderr, "%d errors occurred\n", numErrors)
+	}
+	if numErrors > 0 || signalFlag {
+		os.Exit(1)
 	}
 }
