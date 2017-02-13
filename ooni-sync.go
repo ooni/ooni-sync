@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -22,7 +23,7 @@ func Usage() {
 Downloads selected OONI results.
 KEY and VALUE are query string parameters as described at
 https://measurements.ooni.torproject.org/api/. For example:
-%s test_name=tcp_connect probe_cc=US
+%s -xz test_name=tcp_connect probe_cc=US
 
 `, os.Args[0], os.Args[0])
 	flag.PrintDefaults()
@@ -34,6 +35,46 @@ const ooniAPILimit = 1000
 const numDownloadThreads = 5
 
 var outputDirectory = "."
+var outputExtension = ""
+var downloadFilter = identityFilter
+
+func identityFilter(w io.WriteCloser) (io.WriteCloser, error) {
+	return w, nil
+}
+
+type xzFilter struct {
+	cmd *exec.Cmd
+	stdin io.WriteCloser
+}
+
+func newXZFilter(w io.WriteCloser) (io.WriteCloser, error) {
+	var err error
+	xz := &xzFilter{}
+
+	xz.cmd = exec.Command("xz", "-c")
+	xz.cmd.Stdout = w
+	xz.stdin, err = xz.cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	err = xz.cmd.Start()
+	if err != nil {
+	     return nil, err
+	}
+	return xz, nil
+}
+
+func (xz *xzFilter) Write(p []byte) (int, error) {
+	return xz.stdin.Write(p)
+}
+
+func (xz *xzFilter) Close() error {
+	err := xz.stdin.Close()
+	if err != nil {
+		return err
+	}
+	return xz.cmd.Wait()
+}
 
 // Represents the state of a download attempt. processIndex writes these into a
 // channel and the main goroutine collects them for status updates and cleanup.
@@ -80,7 +121,7 @@ type ooniIndexPage struct {
 }
 
 // Download the contents of a URL and copy them into w.
-func downloadToWriter(urlString string, w io.Writer) (err error) {
+func downloadToWriteCloser(urlString string, w io.WriteCloser) (err error) {
 	var resp *http.Response
 	resp, err = http.Get(urlString)
 	if err != nil {
@@ -105,8 +146,14 @@ func downloadToTmpFile(urlString string, tmpFilenameChan chan<- string) (string,
 	// Tell the main goroutine thread to clean up this temporary file.
 	tmpFilenameChan <- tmpfile.Name()
 
-	err = downloadToWriter(urlString, tmpfile)
-	err2 := tmpfile.Close()
+	// Optionally compress.
+	w, err := downloadFilter(tmpfile)
+	if err != nil {
+		return "", err
+	}
+
+	err = downloadToWriteCloser(urlString, w)
+	err2 := w.Close()
 	if err == nil {
 		err = err2
 	}
@@ -123,7 +170,7 @@ func maybeDownload(urlString string, tmpFilenameChan chan<- string) *result {
 		r.Err = err
 		return r
 	}
-	r.LocalFilename = filepath.Join(outputDirectory, path.Base(u.Path))
+	r.LocalFilename = filepath.Join(outputDirectory, path.Base(u.Path)) + outputExtension
 
 	_, err = os.Stat(r.LocalFilename)
 	if err == nil {
@@ -265,14 +312,22 @@ func parseArgsToQuery(args []string) (url.Values, error) {
 }
 
 func main() {
+	var xz bool
+
 	flag.Usage = Usage
 	flag.StringVar(&outputDirectory, "directory", outputDirectory, "directory in which to save results")
+	flag.BoolVar(&xz, "xz", xz, "compress downloads with xz")
 	flag.Parse()
 
 	err := os.MkdirAll(outputDirectory, 0755)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
+	}
+
+	if xz {
+		outputExtension = ".xz"
+		downloadFilter = newXZFilter
 	}
 
 	query, err := parseArgsToQuery(flag.Args())
