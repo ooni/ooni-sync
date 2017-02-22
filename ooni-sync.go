@@ -335,6 +335,31 @@ func parseArgsToQuery(args []string) (url.Values, error) {
 	return query, nil
 }
 
+// Fix up the input query string to match the formats the server expects.
+// Uppercases the values of probe_cc and adds a missing "AS" to the values of
+// probe_asn.
+func canonicalizeQuery(query url.Values) url.Values {
+	canon := url.Values{}
+	for key, values := range query {
+		if key == "probe_cc" {
+			// Country codes have to be uppercase.
+			for _, v := range values {
+				canon.Add(key, strings.ToUpper(v))
+			}
+		} else if key == "probe_asn" {
+			for _, v := range values {
+				if !strings.HasPrefix(v, "AS") {
+					v = "AS" + v
+				}
+				canon.Add(key, v)
+			}
+		} else {
+			canon[key] = values
+		}
+	}
+	return canon
+}
+
 func logOK(localFilename string) {
 	progress.mutex.Lock()
 	progress.n += 1
@@ -380,6 +405,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: %s\n", err)
 		os.Exit(1)
 	}
+	query = canonicalizeQuery(query)
 
 	// The overall structure: processIndex downloads index pages for the
 	// given query and feeds the resulting report URLs into downloadURLChan.
