@@ -1,0 +1,39 @@
+Fast downloader of OONI reports using the OONI API. It works by
+downloading an index of available files, and only downloading the files
+that are not already present locally. You can run it again and again to
+keep a local directory up to date with newly published reports.
+
+Example usage:
+	ooni-sync -xz -directory reports test_name=tcp_connect
+This command will create the directory "reports" if it doesn't exist,
+download all tcp_connect reports that are not already present in the
+directory, and compress the downloaded reports with xz.
+
+The query is composed of name=value pairs. Possible query parameters
+include:
+	test_name=[name]
+	probe_cc=[cc]
+	probe_asn=AS[num]
+	since=[yyyy-mm-dd]
+	until=[yyyy-mm-dd]
+The value of "test_name" can be "tcp_connect", "web_connectivity",
+"nbt", etc. The query parameters "order", "offset", and "limit" are used
+internally by the program and will be overridden if present. More
+documentation on the API is available from
+https://measurements.ooni.torproject.org/api/.
+
+Because the program only uses filename comparison to know whether a
+report file has already been downloaded, it is careful not to store a
+file under its final filename until it has been completely downloaded.
+It is safe to interrupt the program or run two copies simultaneously.
+
+To make your Python scripts capable of processing xz-compressed files,
+just call this function intead of open(filename):
+	def open_magic(filename):
+	    if filename.endswith(".xz"):
+	        p = subprocess.Popen(["xz", "-d", "-c", filename], stdout=subprocess.PIPE)
+	        return p.stdout
+	    else:
+	        return open(filename)
+
+Contact: David Fifield <david@bamsoftware.com>

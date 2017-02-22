@@ -1,3 +1,36 @@
+// Fast downloader of OONI reports using the OONI API. Syncs a local directory
+// with all reports satisfying a given API query. Only downloads reports that
+// are not already present locally.
+//
+// Example usage:
+// 	ooni-sync -xz -directory reports.tcp_connect.201701 test_name=tcp_connect since=2017-01-01 until=2017-02-02
+// This command will create the directory reports.tcp_connect.201701 if it
+// doesn't exist, download all reports satisfying the given query that are not
+// already present in the directory, and compress the downloaded reports with
+// xz.
+//
+// Possible API query parameters:
+// 	test_name=[name] # e.g. web_connectivity, http_host, tcp_connect
+// 	probe_cc=[cc]
+// 	probe_asn=AS[num]
+// 	since=[yyyy-mm-dd]
+// 	until=[yyyy-mm-dd]
+//
+// By default, downloaded reports will be saved into the current directory. Use
+// the -directory option to control the output directory. Use the -xz option to
+// compress the downloaded reports (the .xz extension will be taken into account
+// during later syncs, to avoid downloading the same report again).
+//
+// The program doesn't use checksums or timestamps for to compare local and
+// remote content, only filenames. It assumes that if there is a local file with
+// the same name as a remote file (perhaps adding a .xz extension), that the
+// contents are identical. For that reason, the program tries hard not allow a
+// local file to exist with the same name as a remote file unless it has the
+// same contents. For example, an interrupted download will be discarded rather
+// than left partially downloaded under its final filename.
+//
+// For documentation on the OONI API, see
+// https://measurements.ooni.torproject.org/api/.
 package main
 
 import (
@@ -17,7 +50,7 @@ import (
 	"sync"
 )
 
-func Usage() {
+func usage() {
 	fmt.Fprintf(os.Stderr, `Usage: %s [OPTIONS] [KEY=VALUE]...
 
 Downloads selected OONI results.
@@ -34,10 +67,14 @@ const ooniAPIURL = "https://measurements.ooni.torproject.org/api/v1/files"
 const ooniAPILimit = 1000
 const numDownloadThreads = 5
 
+// Controlled by the -directory option.
 var outputDirectory = "."
+
+// The -xz option changes these.
 var outputExtension = ""
 var downloadFilter = identityFilter
 
+// Output filter to use when -xz is not in effect (save reports verbatim).
 func identityFilter(w io.WriteCloser) (io.WriteCloser, error) {
 	return w, nil
 }
@@ -47,6 +84,7 @@ type xzFilter struct {
 	stdin io.WriteCloser
 }
 
+// Output filter to use when -xz is in effect.
 func newXZFilter(w io.WriteCloser) (io.WriteCloser, error) {
 	var err error
 	xz := &xzFilter{}
@@ -86,6 +124,7 @@ type result struct {
 	Err           error
 }
 
+// This struct helps serialize the "X/Y" output messages.
 type progressCounter struct {
 	n, total uint
 	mutex    sync.Mutex
@@ -138,6 +177,10 @@ func downloadToWriteCloser(urlString string, w io.WriteCloser) (err error) {
 	return err
 }
 
+// Download a URL to a temporary file. Writes the name of the temporary file to
+// tmpFilenameChan before doing anything with it. Runs the downloaded contents
+// through the an io.WriteCloser produced by calling downloadFilter on the
+// temporary file.
 func downloadToTmpFile(urlString string, tmpFilenameChan chan<- string) (string, error) {
 	tmpfile, err := ioutil.TempFile(outputDirectory, "ooni-sync.tmp.")
 	if err != nil {
@@ -161,6 +204,8 @@ func downloadToTmpFile(urlString string, tmpFilenameChan chan<- string) (string,
 	return tmpfile.Name(), err
 }
 
+// Check if a URL needs to be downloaded by checking for a matching local file,
+// and download it if so.
 func maybeDownload(urlString string, tmpFilenameChan chan<- string) *result {
 	r := &result{}
 	r.URL = urlString
@@ -277,6 +322,19 @@ func processIndex(query url.Values, downloadURLChan chan<- string) error {
 	return nil
 }
 
+// Parse a sequence of "key=value" strings into a url.Values.
+func parseArgsToQuery(args []string) (url.Values, error) {
+	query := url.Values{}
+	for _, arg := range args {
+		parts := strings.SplitN(arg, "=", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return query, fmt.Errorf("malformed query parameter: %q", arg)
+		}
+		query.Add(parts[0], parts[1])
+	}
+	return query, nil
+}
+
 func logOK(localFilename string) {
 	progress.mutex.Lock()
 	progress.n += 1
@@ -298,23 +356,10 @@ func logError(downloadURL string, err error) {
 	progress.mutex.Unlock()
 }
 
-// Parse a sequence of "key=value" strings into a url.Values.
-func parseArgsToQuery(args []string) (url.Values, error) {
-	query := url.Values{}
-	for _, arg := range args {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-			return query, fmt.Errorf("malformed query parameter: %q", arg)
-		}
-		query.Add(parts[0], parts[1])
-	}
-	return query, nil
-}
-
 func main() {
 	var xz bool
 
-	flag.Usage = Usage
+	flag.Usage = usage
 	flag.StringVar(&outputDirectory, "directory", outputDirectory, "directory in which to save results")
 	flag.BoolVar(&xz, "xz", xz, "compress downloads with xz")
 	flag.Parse()
@@ -336,11 +381,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	tmpFilenameChan := make(chan string)
-	resultChan := make(chan *result)
+	// The overall structure: processIndex downloads index pages for the
+	// given query and feeds the resulting report URLs into downloadURLChan.
+	// downloadFromChan reads from downloadURLChan, checks for each URL
+	// whether a copy already exists locally, and downloads it if not,
+	// writing the result of the download attempt to resultChan and logging
+	// any temporary files it creates to tmpFilenameChan. The loop in main
+	// reads from resultChan and tmpFilenameChan, renaming temporary files
+	// to their final filenames as necessary and keeping track of temporary
+	// files that have not been renamed (so they can be deleted in case the
+	// program is interrupted).
 
 	downloadURLChan := make(chan string, ooniAPILimit)
+	tmpFilenameChan := make(chan string)
+	resultChan := make(chan *result)
 	go func() {
+		// Download indexes and write the URLs they contain to
+		// downloadURLChan.
 		err = processIndex(query, downloadURLChan)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %s\n", err)
@@ -348,6 +405,7 @@ func main() {
 		}
 		close(downloadURLChan)
 	}()
+	// Start concurrent downloader threads.
 	var wg sync.WaitGroup
 	wg.Add(numDownloadThreads)
 	for i := 0; i < numDownloadThreads; i++ {
@@ -363,13 +421,13 @@ func main() {
 
 	// Keep track of temporary files we need to delete at the end.
 	tmpFilenames := make(map[string]struct{})
-
-	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, os.Interrupt)
-
 	// Things we need to know for the final exit code.
 	var numErrors uint
 	var signalFlag bool
+
+	// Handle SIGINT for cleanup purposes (deleting temporary files).
+	sigChan := make(chan os.Signal)
+	signal.Notify(sigChan, os.Interrupt)
 
 loop:
 	for {
@@ -391,6 +449,8 @@ loop:
 					logError(r.URL, err)
 					numErrors += 1
 				} else {
+					// This temporary file has been handled;
+					// stop tracking it.
 					delete(tmpFilenames, r.TmpFilename)
 					logOK(r.LocalFilename)
 				}
@@ -401,6 +461,7 @@ loop:
 		}
 	}
 
+	// Either resultChan was closed or we received a signal. Clean up.
 	for tmpFilename := range tmpFilenames {
 		err := os.Remove(tmpFilename)
 		if err != nil {
