@@ -46,6 +46,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -348,9 +349,11 @@ func canonicalizeQuery(query url.Values) url.Values {
 			}
 		} else if key == "probe_asn" {
 			for _, v := range values {
-				if !strings.HasPrefix(v, "AS") {
+				// If it's just a number, add an "AS" prefix.
+				if _, err := strconv.ParseUint(v, 10, 32); err == nil {
 					v = "AS" + v
 				}
+				v = strings.ToUpper(v)
 				canon.Add(key, v)
 			}
 		} else {
