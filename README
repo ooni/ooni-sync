@@ -17,7 +17,7 @@ include:
 	since=[yyyy-mm-dd]
 	until=[yyyy-mm-dd]
 The value of "test_name" can be "tcp_connect", "web_connectivity",
-"nbt", etc. The query parameters "order", "offset", and "limit" are used
+"ndt", etc. The query parameters "order", "offset", and "limit" are used
 internally by the program and will be overridden if present. More
 documentation on the API is available from
 https://measurements.ooni.torproject.org/api/.
