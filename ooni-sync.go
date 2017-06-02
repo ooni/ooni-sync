@@ -262,7 +262,12 @@ func fetchIndexPage(baseQuery url.Values, limit, offset uint) (*ooniIndexPage, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err2 := resp.Body.Close()
+		if err == nil {
+			err = err2
+		}
+	}()
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("got %q", resp.Status)
 	}
