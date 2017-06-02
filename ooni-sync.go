@@ -173,6 +173,9 @@ func downloadToWriteCloser(urlString string, w io.WriteCloser) (err error) {
 			err = err2
 		}
 	}()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("got %q", resp.Status)
+	}
 
 	_, err = io.Copy(w, resp.Body)
 	return err
@@ -260,6 +263,9 @@ func fetchIndexPage(baseQuery url.Values, limit, offset uint) (*ooniIndexPage, e
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("got %q", resp.Status)
+	}
 
 	var indexPage ooniIndexPage
 	decoder := json.NewDecoder(resp.Body)
