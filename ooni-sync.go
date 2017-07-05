@@ -251,14 +251,12 @@ func fetchIndexPage(baseQuery url.Values, limit, offset uint) (*ooniIndexPage, e
 	for k, v := range baseQuery {
 		query[k] = v
 	}
-	// Set query values "order", "limit", and "offset".
-	// We order by test_start_time and start with the oldest reports, so
+	// Set query values "order_by", "order", "limit", and "offset".
+	// We order by index number and start with the oldest reports, so
 	// that any reports that are published while the program is running will
 	// be more likely to be appended to the final index page, and not throw
 	// off the offsets for index pages already downloaded.
-	// It would be better to order by index rather than test_start_time,
-	// because index is increasing over time while newly published reports
-	// may have a test_start_time in the past.
+	query.Set("order_by", "idx")
 	query.Set("order", "asc")
 	query.Set("limit", fmt.Sprintf("%d", limit))
 	query.Set("offset", fmt.Sprintf("%d", offset))
