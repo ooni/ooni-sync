@@ -31,7 +31,7 @@ To make your Python scripts capable of processing xz-compressed files,
 just call this function intead of open(filename):
 	def open_magic(filename):
 	    if filename.endswith(".xz"):
-	        p = subprocess.Popen(["xz", "-d", "-c", filename], stdout=subprocess.PIPE)
+	        p = subprocess.Popen(["xz", "-d", "-c", "--", filename], stdout=subprocess.PIPE)
 	        return p.stdout
 	    else:
 	        return open(filename)
