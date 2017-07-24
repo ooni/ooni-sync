@@ -326,6 +326,9 @@ func processIndex(query url.Values, downloadURLChan chan<- string) error {
 		}
 
 		for _, result := range indexPage.Results {
+			if result.DownloadURL == "" {
+				return fmt.Errorf("missing %q field", "download_url")
+			}
 			downloadURLChan <- result.DownloadURL
 		}
 
