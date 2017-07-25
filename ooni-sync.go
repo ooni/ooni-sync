@@ -149,7 +149,7 @@ type ooniMetadata struct {
 
 type ooniResult struct {
 	DownloadURL string `json:"download_url"`
-	Index       uint   `json:"index"`
+	// `json:"index"`
 	// `json:"probe_asn"`
 	// `json:"probe_cc"`
 	// `json:"test_start_time"`
