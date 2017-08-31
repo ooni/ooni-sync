@@ -1,0 +1,16 @@
+project_name: ooni-sync
+builds:
+  - main: ooni-sync.go
+    binary: ooni-sync
+    goos:
+      - windows
+      - darwin
+      - linux
+    goarch:
+      - amd64
+release:
+  github:
+    owner: thetorproject
+    name: ooni-sync
+archive:
+  format: tar.gz
