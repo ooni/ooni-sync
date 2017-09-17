@@ -54,12 +54,26 @@ import (
 func usage() {
 	fmt.Fprintf(os.Stderr, `Usage: %s [OPTIONS] [KEY=VALUE]...
 
-Downloads selected OONI results.
-KEY and VALUE are query string parameters as described at
-https://measurements.ooni.torproject.org/api/. For example:
-%s -xz test_name=tcp_connect probe_cc=US
+KEY and VALUE are query string parameters for the OONI Measurements API.
+Possible parameters:
+	test_name=[name]
+	probe_cc=[cc]
+	probe_asn=AS[num]
+	since=[yyyy-mm-dd]
+	until=[yyyy-mm-dd]
 
-`, os.Args[0], os.Args[0])
+Some common test_names (see https://ooni.torproject.org/nettest/):
+	web_connectivity, dns_consistency, tcp_connect,
+	vanilla_tor, meek_fronted_requests_test,
+	http_header_field_manipulation, http_invalid_request_line,
+	facebook_messenger, whatsapp, telegram,
+	dash, ndt
+
+Examples:
+	%s -xz test_name=tcp_connect probe_cc=US
+	%s -xz test_name=vanilla_tor since=2017-01-01 until=2017-01-07
+
+`, os.Args[0], os.Args[0], os.Args[0])
 	flag.PrintDefaults()
 }
 
