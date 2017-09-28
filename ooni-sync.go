@@ -29,8 +29,7 @@
 // same contents. For example, an interrupted download will be discarded rather
 // than left partially downloaded under its final filename.
 //
-// For documentation on the OONI API, see
-// https://measurements.ooni.torproject.org/api/.
+// For documentation on the OONI API, see https://api.ooni.io/api/.
 package main
 
 import (
@@ -77,8 +76,8 @@ Examples:
 	flag.PrintDefaults()
 }
 
-// https://measurements.ooni.torproject.org/api/
-const ooniAPIURL = "https://measurements.ooni.torproject.org/api/v1/files"
+// https://api.ooni.io/api/
+const ooniAPIURL = "https://api.ooni.io/api/v1/files"
 const ooniAPILimit = 1000
 const numDownloadThreads = 5
 
