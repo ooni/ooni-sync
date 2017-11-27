@@ -1,2 +1,3 @@
 ooni-sync
 dist/
+.GITHUB_TOKEN
