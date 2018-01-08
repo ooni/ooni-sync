@@ -36,4 +36,13 @@ just call this function intead of open(filename):
 	    else:
 	        return open(filename)
 
+Tip: to generate a URL that links to a specific measurement OONI
+Explorer, use this jq syntax:
+	"https://explorer.ooni.torproject.org/measurement/\(.report_id|@uri)?input=\(.input|join(":")|@uri)"
+For example, here is how to generate a table from a directory full of
+reports:
+	cat reports/*.json | jq -r '[.measurement_start_time,.probe_cc,.probe_asn,.test_name,"https://explorer.ooni.torproject.org/measurement/\(.report_id|@uri)?input=\(.input|join(":")|@uri)"]|@tsv'
+Or, if you used the -xz option:
+	xz -dc reports/*.json.xz | jq -r '[.measurement_start_time,.probe_cc,.probe_asn,.test_name,"https://explorer.ooni.torproject.org/measurement/\(.report_id|@uri)?input=\(.input|join(":")|@uri)"]|@tsv'
+
 Contact: David Fifield <david@bamsoftware.com>
