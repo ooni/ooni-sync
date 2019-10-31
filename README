@@ -1,3 +1,7 @@
+ATTENTION: OONI now offers a full database to quicky access all the data 
+and the use of the OONI Sync tool is no longer recommended. For all the 
+options available to access OONI data see: https://ooni.org/data/.
+
 Fast downloader of OONI reports using the OONI API. It works by
 downloading an index of available files, and only downloading the files
 that are not already present locally. You can run it again and again to
